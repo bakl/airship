@@ -11,7 +11,7 @@ arch_name = "projectname.dist.tar.gz"
 destination_dir = "projectname"
 
 # Variables
-# Built in variables: VERSION, ENV, DESTINATION_DIR, DOCKER_PROJECT_NAME
+# Built in variables: VERSION, ENV, DESTINATION_DIR, DOCKER_PROJECT_NAME, TEMP_DIR, TEMP_ENVIRONMENT_DIR
 # Use $VARNAME variables in path and ${VARNAME} in file content
 variables = {
     'DOCKER_PROJECT_NAME': 'projectname',
@@ -32,6 +32,7 @@ containers = [
         'dockerfile': 'docker/projectname/Dockerfile',
         'build_path': '',
         'build_args': ['VERSION=$VERSION'],
+        'build_contexts': ['app1=/path/to/app1-src-dir'],
         'arch_name': 'projectname.tar'
     }
 ]

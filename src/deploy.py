@@ -11,16 +11,17 @@ import json
 import http.client
 from datetime import datetime
 
-version = "v1.2.20"
+version = "v1.2.21"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
     print("")
     print("Commands: ")
-    print(" build    build docker containers")
-    print(" push     push docker containers to registry")
-    print(" deploy   make environment archive, upload it to server, and run")
-    print(" run      execute 'run' command")
+    print(" build-env  build environment content")
+    print(" build      build docker containers")
+    print(" push       push docker containers to registry")
+    print(" deploy     make environment archive, upload it to server, and run")
+    print(" run        execute 'run' command")
     print("")
     print("Options: ")
     print(" -v                   verbose mode, print executed commands")
@@ -112,7 +113,7 @@ def copy_and_replace(variables, file):
 
     if 'replace_vars' in file and file['replace_vars'] and len(variables) > 0:
         for var, val in variables.items():
-            cmdVars += " -e 's/${%s}/%s/g'" % (var, val.replace('/', '\/'))
+            cmdVars += " -e 's/${%s}/%s/g'" % (var, val.replace('/', r'\/'))
         cmd = "cat %s | sed %s > %s" % (file['path'], cmdVars, file['env_path'])
     else:
         cmd = "cp %s %s" % (file['path'], file['env_path'])
@@ -150,13 +151,19 @@ def docker_build(variables, container):
         arg = replace_variables(build_variables, arg)
         build_args.append('--build-arg ' + arg)
 
+    build_contexts = []
+    for arg in container['build_contexts']:
+        arg = replace_variables(build_variables, arg)
+        build_args.append('--build-context ' + arg)
+
     if container['build_path'] == "./":
         container['build_path'] = os.path.dirname(container['dockerfile'])
     else:
         container['build_path'] = os.path.join(config.work_dir, replace_variables(variables, container['build_path']))
 
-    run("docker build %s -t %s/%s -f %s %s" % (
+    run("docker build %s %s -t %s/%s -f %s %s" % (
         " ".join(build_args),
+        " ".join(build_contexts),
         container['registry'],
         container['name'],
         container['dockerfile'],
@@ -222,7 +229,7 @@ def http_request(url):
 
 
 def update():
-    resp = http_request('api.github.com/repos/sneakersass/airship/git/refs/tags/')
+    resp = http_request('api.github.com/repos/bakl/airship/git/refs/tags/')
     tags = json.loads(resp)
     latest_tag_name = tags[len(tags)-1]['ref'].replace('refs/tags/', '')
     current_version = version.replace('v', '').replace('.', '')
@@ -231,7 +238,7 @@ def update():
         mes("Newest version %s is here!" % version)
         exit()
 
-    code = http_request("raw.githubusercontent.com/sneakersass/airship/%s/src/deploy.py" % latest_tag_name)
+    code = http_request("raw.githubusercontent.com/bakl/airship/%s/src/deploy.py" % latest_tag_name)
 
     if '### END OF CODE' not in code or '### START OF CODE' not in code:
         err("Downloaded code is broken. Check github repository issues or try again.")
@@ -279,7 +286,7 @@ if len(sys.argv) < 2:
     usage()
     exit()
 
-if 'run' in commands or 'deploy' in commands or 'build' in commands or 'push' in commands or 'init' in commands:
+if 'run' in commands or 'deploy' in commands or 'build' in commands or 'build-env' in commands or 'push' in commands or 'init' in commands:
     if len(sys.argv) < 3:
         usage()
         exit()
@@ -305,18 +312,22 @@ if server_name != '':
     if "destination_dir" in server:
         config.destination_dir = server['destination_dir']
 
-config.variables.update(
-    {
-        'DESTINATION_DIR': config.destination_dir,
-    }
-)
-
-if skip_containers_flag:
-    config.containers = []
-
 config.temp_dir_environment = os.path.join(config.temp_dir, "environment")
 config.temp_dir_containers = os.path.join(config.temp_dir, "containers")
 config.temp_dir_archives = os.path.join(config.temp_dir, "archives")
+
+config.variables.update(
+    {
+        'DESTINATION_DIR': config.destination_dir,
+        'TEMP_DIR': config.temp_dir,
+        'TEMP_ENVIRONMENT_DIR': config.temp_dir_environment
+    }
+)
+
+config.variables.update(os.environ)
+
+if skip_containers_flag:
+    config.containers = []
 
 
 def signal_handler(signal, frame):
@@ -334,7 +345,7 @@ if version_flag:
 if len(commands) < 1:
     ask = input("Do you want to build, push and deploy v%s to [%s] Y/n: " % (server['version'], server_name))
     if ask == "Y" or ask == "y" or ask == "":
-        commands = ['build', 'push', 'deploy']
+        commands = ['build-env', 'build', 'push', 'deploy']
     else:
         exit()
 
@@ -348,33 +359,8 @@ for command in commands:
         mes("Checking for updates...")
         update()
 
-    elif command == 'build':
-        mes("Start building v%s for [%s]" % (server['version'], server_name))
-
+    elif command == 'build-env':
         stage_cleanup_temp_dir()
-
-        mes("Build containers")
-        for container in config.containers:
-            docker_build(config.variables, container)
-
-    elif command == 'push':
-        mes("Start pushing containers v%s for [%s]" % (server['version'], server_name))
-        mes("Push containers")
-        for container in config.containers:
-            if 'arch_name' not in container:
-                docker_push(config.variables, container)
-
-    elif command == 'deploy':
-        mes("Start deploy v%s to [%s]" % (server['version'], server_name))
-
-        deb("Variables: %r" % config.variables)
-
-        stage_cleanup_temp_dir()
-
-        mes("Dump containers")
-        for container in config.containers:
-            if 'arch_name' in container:
-                docker_dump(config.variables, container)
 
         mes("Copy environment files")
         for file in config.files:
@@ -406,6 +392,30 @@ for command in commands:
                                                          os.path.relpath(dirFile, file['path']))
                             }
                         )
+
+    elif command == 'build':
+        mes("Start building v%s for [%s]" % (server['version'], server_name))
+
+        mes("Build containers")
+        for container in config.containers:
+            docker_build(config.variables, container)
+
+    elif command == 'push':
+        mes("Start pushing containers v%s for [%s]" % (server['version'], server_name))
+        mes("Push containers")
+        for container in config.containers:
+            if 'arch_name' not in container:
+                docker_push(config.variables, container)
+
+    elif command == 'deploy':
+        mes("Start deploy v%s to [%s]" % (server['version'], server_name))
+
+        deb("Variables: %r" % config.variables)
+
+        mes("Dump containers")
+        for container in config.containers:
+            if 'arch_name' in container:
+                docker_dump(config.variables, container)
 
         mes("Build archive(s)")
         archive(os.path.join(config.temp_dir_archives, config.arch_name), config.temp_dir_environment)

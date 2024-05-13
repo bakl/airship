@@ -1,5 +1,8 @@
 [README](README.md)
 
+### 1.2.21
+- Merge environment variables to config variables
+
 ### 1.2.20
 - Add SERVER_HOST to variables
 
