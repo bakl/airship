@@ -11,7 +11,7 @@ import json
 import http.client
 from datetime import datetime
 
-version = "v1.2.25"
+version = "v1.2.26"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -152,9 +152,10 @@ def docker_build(variables, container):
         build_args.append('--build-arg ' + arg)
 
     build_contexts = []
-    for arg in container['build_contexts']:
-        arg = replace_variables(build_variables, arg)
-        build_args.append('--build-context ' + arg)
+    if 'build_contexts' in container:
+        for arg in container['build_contexts']:
+            arg = replace_variables(build_variables, arg)
+            build_args.append('--build-context ' + arg)
 
     if container['build_path'] == "./":
         container['build_path'] = os.path.dirname(container['dockerfile'])
