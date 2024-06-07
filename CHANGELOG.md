@@ -1,6 +1,6 @@
 [README](README.md)
 
-### 1.2.23
+### 1.2.24
 - Merge environment variables to config variables
 
 ### 1.2.20
