@@ -11,7 +11,7 @@ import json
 import http.client
 from datetime import datetime
 
-version = "v1.2.24"
+version = "v1.2.25"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
