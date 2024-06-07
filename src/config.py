@@ -33,7 +33,9 @@ containers = [
         'build_path': '',
         'build_args': ['VERSION=$VERSION'],
         'build_contexts': ['app1=/path/to/app1-src-dir'],
-        'arch_name': 'projectname.tar'
+        'arch_name': 'projectname.tar',
+        'buildx': True,
+        'platform': 'linux/amd64'
     }
 ]
 

@@ -11,7 +11,7 @@ import json
 import http.client
 from datetime import datetime
 
-version = "v1.2.26"
+version = "v1.2.27"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -162,7 +162,17 @@ def docker_build(variables, container):
     else:
         container['build_path'] = os.path.join(config.work_dir, replace_variables(variables, container['build_path']))
 
-    run("docker build %s %s -t %s/%s -f %s %s" % (
+    buildx = ''
+    if 'buildx' in container and container['buildx']:
+        buildx = 'buildx'
+
+    platform = ''
+    if 'platform' in container:
+        platform = '--platform ' + container['platform']
+
+    run("docker %s build %s %s %s -t %s/%s -f %s %s" % (
+        buildx,
+        platform,
         " ".join(build_args),
         " ".join(build_contexts),
         container['registry'],

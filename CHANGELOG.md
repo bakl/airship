@@ -1,5 +1,9 @@
 [README](README.md)
 
+### 1.2.26
+- Add buildx support
+- Add platform parameter for container
+
 ### 1.2.24
 - Merge environment variables to config variables
 
