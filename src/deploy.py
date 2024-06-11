@@ -12,7 +12,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.28"
+version = "v1.2.29"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -135,7 +135,6 @@ def find_files_for_replace(path, patterns):
                 continue
             fileCandidates.append(os.path.join(root, file))
 
-    print(fileCandidates)
     return fileCandidates
 
 
