@@ -9,9 +9,10 @@ import signal
 import subprocess
 import json
 import http.client
+import pprint
 from datetime import datetime
 
-version = "v1.2.27"
+version = "v1.2.28"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -30,7 +31,7 @@ def usage():
     print("")
     print(" --version            print this script version")
     print(" --update             update this script")
-
+    print(" --config             print config")
 
 # -- Lib
 
@@ -163,14 +164,17 @@ def docker_build(variables, container):
         container['build_path'] = os.path.join(config.work_dir, replace_variables(variables, container['build_path']))
 
     buildx = ''
-    if 'buildx' in container and container['buildx']:
+    if ('buildx' in config.docker and config.docker['buildx']) or ('buildx' in container and container['buildx']):
         buildx = 'buildx'
 
     platform = ''
+    if 'platform' in config.docker:
+        platform = '--platform ' + config.docker['platform']
     if 'platform' in container:
         platform = '--platform ' + container['platform']
 
-    run("docker %s build %s %s %s -t %s/%s -f %s %s" % (
+    run("%sdocker %s build %s %s %s -t %s/%s -f %s %s" % (
+        get_docker_host(variables, container['docker_host'] if 'docker_host' in container else ''),
         buildx,
         platform,
         " ".join(build_args),
@@ -185,7 +189,8 @@ def docker_build(variables, container):
 def docker_push(variables, container):
     container['registry'] = replace_variables(variables, container['registry'])
     container['name'] = replace_variables(variables, container['name'])
-    run("docker push %s/%s" % (
+    run("%sdocker push %s/%s" % (
+        get_docker_host(variables, container['docker_host'] if 'docker_host' in container else ''),
         container['registry'],
         container['name']
     ))
@@ -230,6 +235,16 @@ def stage_cleanup_temp_dir():
     run("mkdir -p %s" % config.temp_dir_containers)
     run("mkdir -p %s" % config.temp_dir_archives)
 
+def get_docker_host(variables, host = ''):
+    docker_host = ''
+    if host != '':
+        docker_host = host
+    elif 'host' in config.docker:
+        docker_host = config.docker['host']
+    else:
+        return ''
+
+    return 'DOCKER_HOST=' + replace_variables(variables, docker_host) + ' '
 
 def http_request(url):
     (host, path) = url.split('/', 1)
@@ -291,6 +306,7 @@ debug_flag = "-v" in flags
 dry_run_flag = "--dry" in flags
 skip_containers_flag = "--skip-containers" in flags
 update_flag = "--update" in flags
+config_flag = "--config" in flags
 version_flag = "--version" in flags
 
 if len(sys.argv) < 2:
@@ -340,6 +356,8 @@ config.variables.update(os.environ)
 if skip_containers_flag:
     config.containers = []
 
+if not hasattr(config, 'docker'):
+    config.docker = {}
 
 def signal_handler(signal, frame):
     sys.exit(0)
@@ -352,6 +370,9 @@ if update_flag:
 
 if version_flag:
     commands = ['version']
+
+if config_flag:
+    commands = ['config']
 
 if len(commands) < 1:
     ask = input("Do you want to build, push and deploy v%s to [%s] Y/n: " % (server['version'], server_name))
@@ -466,6 +487,10 @@ for command in commands:
     elif command == 'run':
         mes("Run")
         ssh(server, replace_variables(config.variables, config.run_command))
+
+    elif command == 'config':
+        mes("Current config")
+        pprint.pprint({var:vars(config)[var] for var in dir(config) if not var.startswith('_')})
 
     else:
         if hasattr(config, 'user_commands'):
