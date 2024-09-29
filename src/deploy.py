@@ -12,7 +12,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.29"
+version = "v1.2.30"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -338,6 +338,11 @@ if server_name != '':
     if "destination_dir" in server:
         config.destination_dir = server['destination_dir']
 
+config.variables.update(os.environ)
+
+config.destination_dir = replace_variables(config.variables, config.destination_dir)
+config.temp_dir = replace_variables(config.variables, config.temp_dir)
+
 config.temp_dir_environment = os.path.join(config.temp_dir, "environment")
 config.temp_dir_containers = os.path.join(config.temp_dir, "containers")
 config.temp_dir_archives = os.path.join(config.temp_dir, "archives")
@@ -350,7 +355,7 @@ config.variables.update(
     }
 )
 
-config.variables.update(os.environ)
+config.arch_name = replace_variables(config.variables, config.arch_name)
 
 if skip_containers_flag:
     config.containers = []
@@ -401,10 +406,11 @@ for command in commands:
             file['env_path'] = os.path.join(config.temp_dir_environment, file['env_path'])
             file['env_path'] = replace_variables(config.variables, file['env_path'])
 
-            if not os.path.exists(file['path']):
+            if not os.path.exists(file['path']) and not dry_run_flag:
                 err("File/dir %s not exist" % file['path'])
                 continue
 
+            deb("Process file/dir: " + file['path'])
             if os.path.isfile(file['path']):
                 # @TODO mkdir?
                 copy_and_replace(config.variables, file)
