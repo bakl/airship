@@ -18,8 +18,8 @@ The AirShip deploy script is a flexible tool designed to facilitate the deployme
 
 1. Download the deploy script using `curl`:
     ```sh
-    curl -o deploy.py https://raw.githubusercontent.com/your-repository/airship-deploy/main/deploy.py
-    curl -o config.py https://raw.githubusercontent.com/your-repository/airship-deploy/main/config.py
+    curl -o deploy.py https://raw.githubusercontent.com/bakl/airship/refs/heads/main/src/deploy.py
+    curl -o config.py https://raw.githubusercontent.com/bakl/airship/refs/heads/main/src/config.py
     ```
 
 2. Ensure the script is executable:
