@@ -17,3 +17,6 @@
 - Remove init command (use user commands instead)
 - Add user commands
 - Remove "docker_project_name" variable (use global variables array instead)
+
+### 1.2.31
+- Replace variables in server version

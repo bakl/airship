@@ -12,7 +12,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.30"
+version = "v1.2.31"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -320,6 +320,10 @@ if 'run' in commands or 'deploy' in commands or 'build' in commands or 'build-en
         err("Error: server [%s] not exist in config" % server_name)
         exit()
 
+# Load env to variables
+config.variables.update(os.environ)
+
+# Load server config
 if server_name != '':
     server = config.servers[server_name]
 
@@ -327,7 +331,7 @@ if server_name != '':
         {
             'SERVER_HOST': server['host'],
             'SERVER_NAME': server_name,
-            'VERSION': server['version'],
+            'VERSION': replace_variables(server['version'], config.variables),
             'ENV': server['env'],
         }
     )
@@ -337,8 +341,6 @@ if server_name != '':
 
     if "destination_dir" in server:
         config.destination_dir = server['destination_dir']
-
-config.variables.update(os.environ)
 
 config.destination_dir = replace_variables(config.variables, config.destination_dir)
 config.temp_dir = replace_variables(config.variables, config.temp_dir)
