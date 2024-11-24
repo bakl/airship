@@ -12,7 +12,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.32"
+version = "v1.2.33"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -381,7 +381,7 @@ if config_flag:
     commands = ['config']
 
 if len(commands) < 1:
-    ask = input("Do you want to build, push and deploy v%s to [%s] Y/n: " % (server['version'], server_name))
+    ask = input("Do you want to build, push and deploy v%s to [%s] Y/n: " % (config.variables['VERSION'], server_name))
     if ask == "Y" or ask == "y" or ask == "":
         commands = ['build-env', 'build', 'push', 'deploy']
     else:
@@ -433,21 +433,21 @@ for command in commands:
                         )
 
     elif command == 'build':
-        mes("Start building v%s for [%s]" % (server['version'], server_name))
+        mes("Start building v%s for [%s]" % (config.variables['VERSION'], server_name))
 
         mes("Build containers")
         for container in config.containers:
             docker_build(config.variables, container)
 
     elif command == 'push':
-        mes("Start pushing containers v%s for [%s]" % (server['version'], server_name))
+        mes("Start pushing containers v%s for [%s]" % (config.variables['VERSION'], server_name))
         mes("Push containers")
         for container in config.containers:
             if 'arch_name' not in container:
                 docker_push(config.variables, container)
 
     elif command == 'deploy':
-        mes("Start deploy v%s to [%s]" % (server['version'], server_name))
+        mes("Start deploy v%s to [%s]" % (config.variables['VERSION'], server_name))
 
         deb("Variables: %r" % config.variables)
 
