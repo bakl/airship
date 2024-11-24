@@ -18,5 +18,5 @@
 - Add user commands
 - Remove "docker_project_name" variable (use global variables array instead)
 
-### 1.2.31
+### 1.2.32
 - Replace variables in server version

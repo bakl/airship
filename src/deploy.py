@@ -12,7 +12,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.31"
+version = "v1.2.32"
 
 def usage():
     print("AirShip [%s] usage: deploy.py [server name] {commands} {options}" % version)
@@ -331,7 +331,7 @@ if server_name != '':
         {
             'SERVER_HOST': server['host'],
             'SERVER_NAME': server_name,
-            'VERSION': replace_variables(server['version'], config.variables),
+            'VERSION': replace_variables(config.variables, server['version']),
             'ENV': server['env'],
         }
     )
