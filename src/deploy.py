@@ -11,7 +11,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.35"
+version = "v1.2.36"
 
 import config
 
@@ -222,61 +222,105 @@ def docker_dump(variables, container):
 
 
 def docker_cleanup_old_versions(server, variables, container):
-    """Clean up old versions of the container, keeping only the N most recent versions.
-    Cleanup is optional and controlled by cleanup_old parameter in container config.
-    Tag pattern can be specified via cleanup_pattern parameter, defaults to *-{build_type}"""
+    """Clean up old versions of a container, keeping only the specified number of versions.
+    Cleanup is controlled by cleanup_old parameter in container config.
+    Optional parameters:
+    - keep_versions: number of versions to keep (default: 2)
+    - cleanup_pattern: pattern to match tags for cleanup (e.g. "*-prod")"""
     
     # Skip if cleanup is not enabled
     if not container.get('cleanup_old', False):
+        deb("Skipping cleanup for %s - cleanup_old not enabled" % container['name'])
         return
         
-    # Get the base name without version
+    # Get container info
+    registry = replace_variables(variables, container['registry'])
     container_name = container['name'].split(':')[0]
     container_name = replace_variables(variables, container_name)
-    current_tag = container['name'].split(':')[1]
-    current_tag = replace_variables(variables, current_tag)
-    registry = replace_variables(variables, container['registry'])
+    keep_versions = int(container.get('keep_versions', 2))
     
-    # Get build type from current tag (e.g. 'prod' from '1.0-prod')
-    build_type = 'unknown'
-    if '-' in current_tag:
-        build_type = current_tag.split('-', 1)[1]
-    
-    # Get number of versions to keep (default 3)
-    keep_versions = container.get('keep_versions', 3)
-    
-    # Get tag pattern to match
+    # Get tag pattern if specified
+    tag_pattern = ''
     if 'cleanup_pattern' in container:
         tag_pattern = replace_variables(variables, container['cleanup_pattern'])
+        # Convert glob pattern to grep pattern
+        tag_pattern = tag_pattern.replace('*', '.*')
+        mes("Cleaning up old versions of %s/%s matching pattern '%s' (keeping %d newest versions)" % 
+            (registry, container_name, tag_pattern, keep_versions))
     else:
-        # Default pattern matches tags with same build type
-        tag_pattern = "*-" + build_type
-    
-    # List all versions of this container and get list of images to remove
+        mes("Cleaning up old versions of %s/%s (keeping %d newest versions)" % 
+            (registry, container_name, keep_versions))
+
     cleanup_cmd = """
-    # Get list of all versions matching pattern except N most recent
-    for img in $(docker images '%s/%s' --format '{{.Tag}}\\t{{.ID}}' | grep '%s' | sort -rV | tail -n +"%d"); do
-        tag=$(echo $img | cut -f1)
-        id=$(echo $img | cut -f2)
-        
-        # Skip if image is used by any container
-        if docker ps -a --format '{{.Image}}' | grep -q "$id\\|%s/%s:$tag"; then
-            continue
+    set -e  # Exit on any error
+    
+    echo "Listing all tags for %s/%s..."
+    ALL_TAGS=$(docker images '%s/%s' --format '{{.Tag}}' | sort -rV)
+    
+    if [ -z "$ALL_TAGS" ]; then
+        echo "No tags found"
+        exit 0
+    fi
+    
+    # Filter tags by pattern if specified
+    if [ ! -z "%s" ]; then
+        echo "Filtering tags by pattern: %s"
+        ALL_TAGS=$(echo "$ALL_TAGS" | grep -E "%s" || true)
+        if [ -z "$ALL_TAGS" ]; then
+            echo "No tags match the pattern"
+            exit 0
         fi
+    fi
+    
+    TOTAL_TAGS=$(echo "$ALL_TAGS" | wc -l)
+    echo "Found $TOTAL_TAGS matching tags"
+    
+    if [ $TOTAL_TAGS -gt %d ]; then
+        echo "Keeping %d newest versions, removing older ones..."
+        TAGS_TO_REMOVE=$(echo "$ALL_TAGS" | tail -n +%d)
         
-        # Remove the image and any dangling images with same ID
-        docker rmi -f %s/%s:$tag 2>/dev/null || true
-        docker images -f "dangling=true" --format "{{.ID}}" | grep -q $id && docker rmi -f $(docker images -f "dangling=true" --format "{{.ID}}" | grep ^$id) 2>/dev/null || true
-    done
+        echo "$TAGS_TO_REMOVE" | while read -r tag; do
+            if [ ! -z "$tag" ]; then
+                # Check if image is used by any container
+                if docker ps -a --format '{{.Image}}' | grep -q "%s/%s:$tag"; then
+                    echo "Skipping $tag - image is in use"
+                    continue
+                fi
+                
+                echo "Removing %s/%s:$tag"
+                if docker rmi -f %s/%s:$tag; then
+                    echo "Successfully removed $tag"
+                else
+                    echo "Failed to remove $tag"
+                fi
+            fi
+        done
+    else
+        echo "No cleanup needed - number of tags ($TOTAL_TAGS) <= keep_versions (%d)"
+    fi
+    """ % (registry, container_name,  # For first echo
+           registry, container_name,  # For docker images
+           tag_pattern,  # For if check
+           tag_pattern,  # For echo
+           tag_pattern,  # For grep
+           keep_versions,  # For comparison
+           keep_versions,  # For echo
+           keep_versions + 1,  # For tail
+           registry, container_name,  # For grep
+           registry, container_name,  # For echo
+           registry, container_name,  # For docker rmi
+           keep_versions)  # For echo
     
-    # Final cleanup of any dangling images
-    docker image prune -f
-    """ % (registry, container_name, tag_pattern, keep_versions + 1, registry, container_name, registry, container_name)
-    
-    ssh(server, cleanup_cmd)
+    try:
+        ssh(server, cleanup_cmd)
+    except Exception as e:
+        err("Failed to cleanup old versions of %s/%s: %s" % (registry, container_name, str(e)))
+        # Don't fail deployment if cleanup fails
+        pass
 
 
 def docker_import(server, variables, container):
+    mes("Import container: %s" % container['name'])
     ssh(server, "cd %s && docker load -i %s" % (
         config.destination_dir,
         replace_variables(variables, container['arch_name'])
@@ -563,8 +607,9 @@ def main():
 
                         upload(server, temp_path, config.destination_dir,
                                'ignore_existing' in container and container['ignore_existing'])
-                    docker_cleanup_old_versions(server, config.variables, container)
                     docker_import(server, config.variables, container)
+
+                    docker_cleanup_old_versions(server, config.variables, container)
 
             mes("Run")
             ssh(server, replace_variables(config.variables, config.run_command))

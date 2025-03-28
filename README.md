@@ -27,6 +27,20 @@ The AirShip deploy script is a flexible tool designed to facilitate the deployme
     chmod +x deploy.py
     ```
 
+## Running Tests
+
+The project includes unit tests to verify the functionality of Docker image cleanup and other features.
+
+### Prerequisites
+- Docker daemon must be running
+- User must have permissions to work with Docker
+
+### Basic Test Execution
+```sh
+# Run all tests with basic output
+PYTHONPATH=src python3 tests/test_cleanup.py
+```
+
 ## Usage
 
 The deploy script supports several commands and options. Below is a comprehensive guide to using the script.
