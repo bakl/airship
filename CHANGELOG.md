@@ -1,5 +1,8 @@
 [README](README.md)
 
+### 1.2.34
+- Add automatic cleanup of old container versions with keep_versions parameter
+
 ### 1.2.26
 - Add buildx support
 - Add platform parameter for container

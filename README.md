@@ -68,7 +68,7 @@ Deploy to Development Server
 Build and Push Docker Containers
 ```sh
 ./deploy.py dev build push
-````
+```
 
 Run Custom Command
 ```sh
@@ -95,7 +95,10 @@ containers = [
     'registry': 'registry.fish.com:5000',
     'dockerfile': 'docker/fish/Dockerfile',
     'arch_name': 'fish-first-container.tar',
-    'docker_host': 'ssh://user@remote-ssh-docker-host-another'
+    'docker_host': 'ssh://user@remote-ssh-docker-host-another',
+    'cleanup_old': true,  # Optional: enable cleanup of old versions (default: false)
+    'keep_versions': 5,   # Optional: number of versions to keep (default: 3)
+    'cleanup_pattern': '*-prod'  # Optional: pattern to match tags for cleanup (default: *-{build_type})
     }
 ]
 ```
@@ -181,7 +184,10 @@ containers = [
         'arch_name': 'fish-first-container.tar',  # Archive name for the container
         'buildx': True,  # Use buildx for this container
         'platform': 'linux/amd64',  # Platform for this container
-        'docker_host': 'ssh://user@remote-ssh-docker-host-another'  # Docker host for this container
+        'docker_host': 'ssh://user@remote-ssh-docker-host-another',  # Docker host for this container
+        'cleanup_old': true,  # Optional: enable cleanup of old versions (default: false)
+        'keep_versions': 5,   # Optional: number of versions to keep (default: 3)
+        'cleanup_pattern': '*-prod'  # Optional: pattern to match tags for cleanup (default: *-{build_type})
     },
     {
         'name': 'fish-second-container:$VERSION',
