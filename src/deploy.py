@@ -11,7 +11,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.37"
+version = "v1.2.38"
 
 import config
 
@@ -60,19 +60,22 @@ def deb(text):
     print('\033[90m' + text + '\033[0m')
 
 
-def run(command):
-    deb(command)
+def run(command, input=None):
+    if input is not None:
+        deb(command + " " + str(input))
+    else:
+        deb(command)
     if not dry_run_flag:
         try:
-            retcode = subprocess.call(command, shell=True)
-            if retcode < 0 or retcode > 0:
-                sys.exit(retcode)
+            process = subprocess.run(command, input=input, shell=True, text=True)
+            if process.returncode < 0 or process.returncode > 0:
+                sys.exit(process.returncode)
         except OSError as e:
             print("Execution failed:", e, file=sys.stderr)
 
 
 def ssh(server, command):
-    cmd = "ssh -t "
+    cmd = "ssh "
 
     if 'port' in server and server['port'] != '':
         cmd += " -p " + server['port'] + " "
@@ -80,8 +83,9 @@ def ssh(server, command):
     if 'user' in server and server['user'] != '':
         cmd += server['user'] + "@"
 
-    cmd += server['host'] + " '" + command.replace("'", r"\'") + "'"
-    run(cmd)
+    cmd += server['host']
+    cmd += " bash -s"
+    run(cmd, command)
 
 
 def upload(server, frm, to, ignore_existing=False):
@@ -214,48 +218,39 @@ def docker_dump(variables, container):
     if 'deploy_separately' in container and container['deploy_separately']:
         temp_path = config.temp_dir_containers
 
-    run("docker save %s/%s -o %s" % (
+    run("%sdocker save %s/%s -o %s" % (
+        get_docker_host(variables, container['docker_host'] if 'docker_host' in container else ''),
         container['registry'],
         container['name'],
         os.path.join(temp_path, replace_variables(variables, container['arch_name']))
     ))
 
-
 def docker_cleanup_old_versions(server, variables, container):
-    """Clean up old versions of a container, keeping only the specified number of versions.
-    Cleanup is controlled by cleanup_old parameter in container config.
-    Optional parameters:
-    - keep_versions: number of versions to keep (default: 2)
-    - cleanup_pattern: pattern to match tags for cleanup (e.g. "*-prod")"""
-    
-    # Skip if cleanup is not enabled
+    """Clean up old versions of Docker images"""
     if not container.get('cleanup_old', False):
-        deb("Skipping cleanup for %s - cleanup_old not enabled" % container['name'])
+        deb(f"Cleanup disabled for {container['name']}")
         return
-        
-    # Get container info
-    registry = replace_variables(variables, container['registry'])
-    container_name = container['name'].split(':')[0]
-    container_name = replace_variables(variables, container_name)
-    keep_versions = int(container.get('keep_versions', 2))
+
+    registry = container.get('registry', '')
+    image_name = container['name'].split(':')[0]
+    if registry:
+        image_name = f"{registry}/{image_name}"
     
-    # Get tag pattern if specified
-    tag_pattern = ''
-    if 'cleanup_pattern' in container:
-        tag_pattern = replace_variables(variables, container['cleanup_pattern'])
-        # Convert glob pattern to grep pattern
-        tag_pattern = tag_pattern.replace('*', '.*')
-        mes("Cleaning up old versions of %s/%s matching pattern '%s' (keeping %d newest versions)" % 
-            (registry, container_name, tag_pattern, keep_versions))
-    else:
-        mes("Cleaning up old versions of %s/%s (keeping %d newest versions)" % 
-            (registry, container_name, keep_versions))
+    keep_versions = container.get('keep_versions', 2)
+    cleanup_pattern = container.get('cleanup_pattern', '')
+    
+    # Convert glob pattern to grep pattern
+    if cleanup_pattern:
+        cleanup_pattern = cleanup_pattern.replace('*', '.*')
+    
+    mes(f"Cleaning up old versions of {image_name}" + 
+        (f" matching pattern '{cleanup_pattern}'" if cleanup_pattern else '') +
+        f" (keeping {keep_versions} newest versions)")
 
-    cleanup_cmd = """#!/bin/sh
-set -e  # Exit on any error
+    cleanup_script = f"""set -e
 
-echo "Listing all tags for %s/%s..."
-ALL_TAGS=$(docker images '%s/%s' --format '{{.Tag}}' | sort -rV)
+echo "Listing all tags for {image_name}..."
+ALL_TAGS=$(docker images '{image_name}' --format '{{{{.Tag}}}}' | sort -rV)
 
 if [ -z "$ALL_TAGS" ]; then
     echo "No tags found"
@@ -263,9 +258,9 @@ if [ -z "$ALL_TAGS" ]; then
 fi
 
 # Filter tags by pattern if specified
-if [ ! -z "%s" ]; then
-    echo "Filtering tags by pattern: %s"
-    ALL_TAGS=$(echo "$ALL_TAGS" | grep -E "%s" || true)
+if [ ! -z "{cleanup_pattern}" ]; then
+    echo "Filtering tags by pattern: {cleanup_pattern}"
+    ALL_TAGS=$(echo "$ALL_TAGS" | grep -E "{cleanup_pattern}" || true)
     if [ -z "$ALL_TAGS" ]; then
         echo "No tags match the pattern"
         exit 0
@@ -275,20 +270,18 @@ fi
 TOTAL_TAGS=$(echo "$ALL_TAGS" | wc -l)
 echo "Found $TOTAL_TAGS matching tags"
 
-if [ $TOTAL_TAGS -gt %d ]; then
-    echo "Keeping %d newest versions, removing older ones..."
-    TAGS_TO_REMOVE=$(echo "$ALL_TAGS" | tail -n +%d)
-    
+if [ $TOTAL_TAGS -gt {keep_versions} ]; then
+    echo "Keeping {keep_versions} newest versions, removing older ones..."
+    TAGS_TO_REMOVE=$(echo "$ALL_TAGS" | tail -n +$(({keep_versions} + 1)))
     echo "$TAGS_TO_REMOVE" | while read -r tag; do
         if [ ! -z "$tag" ]; then
             # Check if image is used by any container
-            if docker ps -a --format '{{.Image}}' | grep -q "%s/%s:$tag"; then
+            if docker ps -a --format '{{{{.Image}}}}' | grep -q "{image_name}:$tag"; then
                 echo "Skipping $tag - image is in use"
                 continue
             fi
-            
-            echo "Removing %s/%s:$tag"
-            if docker rmi -f %s/%s:$tag; then
+            echo "Removing {image_name}:$tag"
+            if docker rmi -f {image_name}:$tag; then
                 echo "Successfully removed $tag"
             else
                 echo "Failed to remove $tag"
@@ -296,24 +289,13 @@ if [ $TOTAL_TAGS -gt %d ]; then
         fi
     done
 else
-    echo "No cleanup needed - number of tags ($TOTAL_TAGS) <= keep_versions (%d)"
-fi""" % (registry, container_name,  # For first echo
-       registry, container_name,  # For docker images
-       tag_pattern,  # For if check
-       tag_pattern,  # For echo
-       tag_pattern,  # For grep
-       keep_versions,  # For comparison
-       keep_versions,  # For echo
-       keep_versions + 1,  # For tail
-       registry, container_name,  # For grep
-       registry, container_name,  # For echo
-       registry, container_name,  # For docker rmi
-       keep_versions)  # For echo
+    echo "No cleanup needed - number of tags ($TOTAL_TAGS) <= keep_versions ({keep_versions})"
+fi"""
     
     try:
-        ssh(server, cleanup_cmd)
+        ssh(server, cleanup_script)
     except Exception as e:
-        err("Failed to cleanup old versions of %s/%s: %s" % (registry, container_name, str(e)))
+        err(f"Failed to cleanup old versions of {image_name}: {str(e)}")
         # Don't fail deployment if cleanup fails
         pass
 

@@ -44,7 +44,10 @@ containers = [
         'arch_name': 'projectname-first-container.tar',  # Archive name for the container
         'buildx': True,  # Use buildx for this container
         'platform': 'linux/amd64',  # Platform for this container
-        'docker_host': 'ssh://user@remote-ssh-docker-host-another'  # Docker host for this container
+        'docker_host': 'ssh://user@remote-ssh-docker-host-another',  # Docker host for this container,
+        'cleanup_old': True,  # Optional: enable cleanup of old versions (default: false)
+        'keep_versions': 5,   # Optional: number of versions to keep (default: 3)
+        'cleanup_pattern': '*-prod'  # Optional: pattern to match tags for cleanup (default: *-{build_type})
     },
     {
         'name': 'projectname-second-container:$VERSION',

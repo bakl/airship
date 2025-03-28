@@ -110,7 +110,7 @@ containers = [
     'dockerfile': 'docker/fish/Dockerfile',
     'arch_name': 'fish-first-container.tar',
     'docker_host': 'ssh://user@remote-ssh-docker-host-another',
-    'cleanup_old': true,  # Optional: enable cleanup of old versions (default: false)
+    'cleanup_old': True,  # Optional: enable cleanup of old versions (default: false)
     'keep_versions': 5,   # Optional: number of versions to keep (default: 3)
     'cleanup_pattern': '*-prod'  # Optional: pattern to match tags for cleanup (default: *-{build_type})
     }
