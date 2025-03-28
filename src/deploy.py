@@ -11,7 +11,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.34"
+version = "v1.2.35"
 
 import config
 
