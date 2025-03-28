@@ -185,7 +185,7 @@ containers = [
         'buildx': True,  # Use buildx for this container
         'platform': 'linux/amd64',  # Platform for this container
         'docker_host': 'ssh://user@remote-ssh-docker-host-another',  # Docker host for this container
-        'cleanup_old': true,  # Optional: enable cleanup of old versions (default: false)
+        'cleanup_old': True,  # Optional: enable cleanup of old versions (default: false)
         'keep_versions': 5,   # Optional: number of versions to keep (default: 3)
         'cleanup_pattern': '*-prod'  # Optional: pattern to match tags for cleanup (default: *-{build_type})
     },

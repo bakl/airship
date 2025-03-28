@@ -348,6 +348,11 @@ def update():
 
 def init_config(server_name=''):
     """Initialize configuration based on server name"""
+    global server
+
+    # Load env to variables
+    config.variables.update(os.environ)
+
     # Set server name in variables
     config.variables['SERVER_NAME'] = server_name
 
@@ -425,6 +430,9 @@ def main():
     config_flag = "--config" in flags
     version_flag = "--version" in flags
 
+    # Initialize configuration
+    init_config(server_name)
+
     if len(sys.argv) < 2:
         usage()
         exit()
@@ -436,9 +444,6 @@ def main():
         if server_name not in config.servers:
             err("Error: server [%s] not exist in config" % server_name)
             exit()
-
-    # Load env to variables
-    config.variables.update(os.environ)
 
     if update_flag:
         commands = ['update']
@@ -456,8 +461,6 @@ def main():
         else:
             exit()
 
-    # Initialize configuration
-    init_config(server_name)
 
     # Print welcome message
     print("AirShip %s takes of...\n%s" % (version, getattr(config, 'motd', '')))
