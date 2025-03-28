@@ -11,7 +11,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.38"
+version = "v1.2.39"
 
 import config
 
@@ -232,12 +232,12 @@ def docker_cleanup_old_versions(server, variables, container):
         return
 
     registry = container.get('registry', '')
-    image_name = container['name'].split(':')[0]
+    image_name = replace_variables(variables, container['name'].split(':')[0])
     if registry:
         image_name = f"{registry}/{image_name}"
     
     keep_versions = container.get('keep_versions', 2)
-    cleanup_pattern = container.get('cleanup_pattern', '')
+    cleanup_pattern = replace_variables(variables, container.get('cleanup_pattern', ''))
     
     # Convert glob pattern to grep pattern
     if cleanup_pattern:

@@ -1,6 +1,6 @@
 [README](README.md)
 
-### 1.2.38
+### 1.2.39
 - Add automatic cleanup of old container versions with keep_versions parameter
 
 ### 1.2.26
