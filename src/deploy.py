@@ -11,7 +11,7 @@ import http.client
 import pprint
 from datetime import datetime
 
-version = "v1.2.36"
+version = "v1.2.37"
 
 import config
 
@@ -251,65 +251,64 @@ def docker_cleanup_old_versions(server, variables, container):
         mes("Cleaning up old versions of %s/%s (keeping %d newest versions)" % 
             (registry, container_name, keep_versions))
 
-    cleanup_cmd = """
-    set -e  # Exit on any error
-    
-    echo "Listing all tags for %s/%s..."
-    ALL_TAGS=$(docker images '%s/%s' --format '{{.Tag}}' | sort -rV)
-    
+    cleanup_cmd = """#!/bin/sh
+set -e  # Exit on any error
+
+echo "Listing all tags for %s/%s..."
+ALL_TAGS=$(docker images '%s/%s' --format '{{.Tag}}' | sort -rV)
+
+if [ -z "$ALL_TAGS" ]; then
+    echo "No tags found"
+    exit 0
+fi
+
+# Filter tags by pattern if specified
+if [ ! -z "%s" ]; then
+    echo "Filtering tags by pattern: %s"
+    ALL_TAGS=$(echo "$ALL_TAGS" | grep -E "%s" || true)
     if [ -z "$ALL_TAGS" ]; then
-        echo "No tags found"
+        echo "No tags match the pattern"
         exit 0
     fi
+fi
+
+TOTAL_TAGS=$(echo "$ALL_TAGS" | wc -l)
+echo "Found $TOTAL_TAGS matching tags"
+
+if [ $TOTAL_TAGS -gt %d ]; then
+    echo "Keeping %d newest versions, removing older ones..."
+    TAGS_TO_REMOVE=$(echo "$ALL_TAGS" | tail -n +%d)
     
-    # Filter tags by pattern if specified
-    if [ ! -z "%s" ]; then
-        echo "Filtering tags by pattern: %s"
-        ALL_TAGS=$(echo "$ALL_TAGS" | grep -E "%s" || true)
-        if [ -z "$ALL_TAGS" ]; then
-            echo "No tags match the pattern"
-            exit 0
-        fi
-    fi
-    
-    TOTAL_TAGS=$(echo "$ALL_TAGS" | wc -l)
-    echo "Found $TOTAL_TAGS matching tags"
-    
-    if [ $TOTAL_TAGS -gt %d ]; then
-        echo "Keeping %d newest versions, removing older ones..."
-        TAGS_TO_REMOVE=$(echo "$ALL_TAGS" | tail -n +%d)
-        
-        echo "$TAGS_TO_REMOVE" | while read -r tag; do
-            if [ ! -z "$tag" ]; then
-                # Check if image is used by any container
-                if docker ps -a --format '{{.Image}}' | grep -q "%s/%s:$tag"; then
-                    echo "Skipping $tag - image is in use"
-                    continue
-                fi
-                
-                echo "Removing %s/%s:$tag"
-                if docker rmi -f %s/%s:$tag; then
-                    echo "Successfully removed $tag"
-                else
-                    echo "Failed to remove $tag"
-                fi
+    echo "$TAGS_TO_REMOVE" | while read -r tag; do
+        if [ ! -z "$tag" ]; then
+            # Check if image is used by any container
+            if docker ps -a --format '{{.Image}}' | grep -q "%s/%s:$tag"; then
+                echo "Skipping $tag - image is in use"
+                continue
             fi
-        done
-    else
-        echo "No cleanup needed - number of tags ($TOTAL_TAGS) <= keep_versions (%d)"
-    fi
-    """ % (registry, container_name,  # For first echo
-           registry, container_name,  # For docker images
-           tag_pattern,  # For if check
-           tag_pattern,  # For echo
-           tag_pattern,  # For grep
-           keep_versions,  # For comparison
-           keep_versions,  # For echo
-           keep_versions + 1,  # For tail
-           registry, container_name,  # For grep
-           registry, container_name,  # For echo
-           registry, container_name,  # For docker rmi
-           keep_versions)  # For echo
+            
+            echo "Removing %s/%s:$tag"
+            if docker rmi -f %s/%s:$tag; then
+                echo "Successfully removed $tag"
+            else
+                echo "Failed to remove $tag"
+            fi
+        fi
+    done
+else
+    echo "No cleanup needed - number of tags ($TOTAL_TAGS) <= keep_versions (%d)"
+fi""" % (registry, container_name,  # For first echo
+       registry, container_name,  # For docker images
+       tag_pattern,  # For if check
+       tag_pattern,  # For echo
+       tag_pattern,  # For grep
+       keep_versions,  # For comparison
+       keep_versions,  # For echo
+       keep_versions + 1,  # For tail
+       registry, container_name,  # For grep
+       registry, container_name,  # For echo
+       registry, container_name,  # For docker rmi
+       keep_versions)  # For echo
     
     try:
         ssh(server, cleanup_cmd)
